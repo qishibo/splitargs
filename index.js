@@ -2,7 +2,7 @@
 
 module.exports = splitargs;
 
-function splitargs(line) {
+function splitargs(line, returnBuffer) {
   var ret = [];
   if (!line || typeof line.length !== 'number') {
     return ret;
@@ -23,7 +23,7 @@ function splitargs(line) {
     var inq = false; // if we are in "quotes"
     var insq = false; // if we are in "single quotes"
     var done = false;
-    var current = '';
+    var current = [];
 
     while (!done) {
       var c = line[pos];
@@ -37,9 +37,21 @@ function splitargs(line) {
             case 't': c = '\t'; break;
             case 'b': c = '\b'; break;
             case 'a': c = '\a'; break;
+            // hex such as "\xa2"
+            case 'x': {
+              var hex = line.substr(pos+1, 2);
+              c = Buffer.from(hex, 'hex');
+              if (c.length) {
+                pos += 2;
+                break;
+              }
+              // hex failed, remove "\": \xa => xa
+              c = line[pos];
+              break;
+            }
             default: c = line[pos]; break;
           }
-          current += c;
+          current.push(c);
         } else if (c === '"') {
           // closing quote must be followed by a space or
           // nothing at all.
@@ -50,7 +62,7 @@ function splitargs(line) {
         } else if (pos === len) {
           throw new Error('Unterminated quotes.');
         } else {
-          current += c;
+          current.push(c);
         }
       } else if (insq) {
         if (c === '\\' && line[pos + 1] === '\'') {
@@ -66,7 +78,7 @@ function splitargs(line) {
         } else if (pos === len) {
           throw new Error('Unterminated quotes.');
         } else {
-          current += c;
+          current.push(c);
         }
       } else {
         if (pos === len) {
@@ -86,7 +98,7 @@ function splitargs(line) {
             insq = 1;
             break;
           default:
-            current += c;
+            current.push(c);
             break;
           }
         }
@@ -96,7 +108,21 @@ function splitargs(line) {
       }
     }
     ret.push(current);
-    current = '';
+    current = [];
+  }
+
+  if (!returnBuffer) {
+    ret = ret.map(function(item) {
+      return item.join('');
+    });
+  }
+  else {
+    ret = ret.map(function(item) {
+      var buffers = item.map(function(ele) {
+        return Buffer.from(ele);
+      });
+      return Buffer.concat(buffers);
+    });
   }
 
   return ret;
